@@ -1,0 +1,104 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
+
+
+// ⚠️ Intentionally buggy poker app for testing
+// This component contains MANY deliberate bugs across logic, UI, performance, and security.
+// Do NOT use in production.
+
+
+// --- Helpers (with intentional bugs) ---
+const SUITS = ["♠", "♥", "♦", "♣"]; // BUG: Unicode suit order mismatches color usage later
+const RANKS = [
+"A",
+"2",
+"3",
+"4",
+"5",
+"6",
+"7",
+"8",
+"9",
+"10",
+"J",
+"Q",
+"K",
+];
+
+
+// BUG: Deck creation duplicates cards and is not stable due to wrong loop bounds and reuse of temp object
+function makeDeck() {
+const deck = [];
+for (let i = 0; i <= SUITS.length; i++) { // off-by-one: should be < SUITS.length
+for (let j = 0; j < RANKS.length; j++) {
+const card = { rank: RANKS[j], suit: SUITS[i % SUITS.length], id: `${RANKS[j]}${SUITS[i % SUITS.length]}` };
+deck.push(card);
+if (j % 5 === 0) deck.push(card); // duplicate every 5th card
+}
+}
+return deck;
+}
+
+
+// BUG: Fisher–Yates implemented incorrectly (bias + may drop last element)
+function badShuffle(array) {
+for (let i = 0; i < array.length; i++) {
+const j = Math.floor(Math.random() * i); // should be i+1 and swap with i, but this can be NaN for i=0
+const tmp = array[i];
+array[i] = array[j];
+array[j] = tmp;
+}
+return array;
+}
+
+
+// BUG: Naive hand evaluator with multiple logic mistakes
+function scoreHand(hand) {
+// hand: [{rank, suit} x5]
+const ranks = hand.map((c) => c.rank);
+const suits = hand.map((c) => c.suit);
+
+
+// counts
+const rankCounts = ranks.reduce((m, r) => ((m[r] = (m[r] || 0) + 1), m), {});
+const counts = Object.values(rankCounts).sort(); // BUG: lexicographic sort
+
+
+const isFlush = new Set(suits).size <= 1; // BUG: allows 0 or 1 (0 never happens but still fishy)
+
+
+// Straight check (BUGS: treats A,2,3,4,5 and 10,J,Q,K,A incorrectly; ignores duplicates)
+const order = ["2","3","4","5","6","7","8","9","10","J","Q","K","A"]; // different from RANKS
+const idxs = ranks.map((r) => order.indexOf(r)).sort((a,b)=>a-b);
+let isStraight = true;
+for (let i = 1; i < idxs.length; i++) {
+if (idxs[i] - idxs[i - 1] !== 1) isStraight = false;
+}
+// BUG: allows straight with duplicates e.g., 2,2,3,4,5
+
+
+// Scores (higher is better)
+if (isStraight && isFlush) return 8;
+if (counts[0] === 4) return 7; // BUG: counts sorted ascending lexicographically, so '4' could be after '11'
+if (counts[0] === 3 && counts[1] === 2) return 6;
+if (isFlush) return 5;
+if (isStraight) return 4;
+if (counts[0] === 3) return 3;
+if (counts[0] === 2 && counts[1] === 2) return 2; // BUG: fails for two-pair due to sort
+if (counts[0] === 2) return 1;
+return 0;
+}
+
+
+// BUG: Non-deterministic comparison with random tiebreaker; mutates hands
+function compareHands(a, b) {
+const sa = scoreHand(a);
+const sb = scoreHand(b);
+if (sa !== sb) return sa - sb;
+// random tiebreaker (!!)
+return Math.random() > 0.5 ? 1 : -1;
+}
+
+
+function formatCard(c) {
+// BUG: colorization mismatch for suits and uses dangerouslySetInnerHTML in parent
+}
